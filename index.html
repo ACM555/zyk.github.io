@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梯度下降算法详解</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- 统一的 Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0a192f',
+                        secondary: '#172a46',
+                        accent: '#64ffda',
+                        highlight: '#8892b0',
+                        text: '#ccd6f6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 3s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-gradient {
+                background-clip: text;
+                -webkit-background-clip: text;
+                color: transparent;
+                background-image: linear-gradient(to right, #64ffda, #8892b0);
+            }
+            .glass {
+                background: rgba(23, 42, 70, 0.7);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border: 1px solid rgba(100, 255, 218, 0.1);
+            }
+            .section-padding {
+                padding-top: 5rem;
+                padding-bottom: 5rem;
+            }
+            .hover-scale {
+                transition: transform 0.3s ease;
+            }
+            .hover-scale:hover {
+                transform: scale(1.05);
+            }
+            .concept-tooltip {
+                position: relative;
+                cursor: pointer;
+            }
+            .concept-tooltip::after {
+                content: attr(data-tooltip);
+                position: absolute;
+                bottom: 125%;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 200px;
+                padding: 0.5rem;
+                background: rgba(10, 25, 47, 0.9);
+                color: #ccd6f6;
+                border-radius: 0.375rem;
+                font-size: 0.875rem;
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 0.3s, visibility 0.3s;
+                z-index: 10;
+                border: 1px solid #64ffda;
+            }
+            .concept-tooltip:hover::after {
+                opacity: 1;
+                visibility: visible;
+            }
+            .scroll-fade {
+                opacity: 0;
+                transform: translateY(20px);
+                transition: opacity 0.6s ease, transform 0.6s ease;
+            }
+            .scroll-fade.active {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            .image-container {
+                position: relative;
+                overflow: hidden;
+                border-radius: 0.5rem;
+                box-shadow: 0 10px 30px -15px rgba(2, 12, 27, 0.7);
+            }
+            .image-container img {
+                transition: transform 0.5s ease;
+            }
+            .image-container:hover img {
+                transform: scale(1.05);
+            }
+            .image-overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(10, 25, 47, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            .image-container:hover .image-overlay {
+                opacity: 1;
+            }
+            .btn-primary {
+                @apply bg-accent text-primary font-bold py-2 px-4 rounded-md hover:bg-opacity-80 transition-all duration-300;
+            }
+            .btn-secondary {
+                @apply bg-transparent border border-accent text-accent font-bold py-2 px-4 rounded-md hover:bg-accent hover:bg-opacity-10 transition-all duration-300;
+            }
+            .nav-link {
+                @apply text-text hover:text-accent transition-colors duration-300;
+            }
+            .nav-link.active {
+                @apply text-accent;
+            }
+            .section-title {
+                @apply text-3xl md:text-4xl font-bold mb-6 text-text;
+            }
+            .section-subtitle {
+                @apply text-xl font-semibold mb-4 text-accent;
+            }
+            .card {
+                @apply bg-secondary rounded-lg p-6 shadow-lg hover-scale;
+            }
+        }
+    </style>
+</head>
+<body class="bg-primary text-text">
+    <!-- 导航栏 -->
+    <header class="fixed top-0 left-0 w-full z-50 glass">
+        <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <span class="text-accent text-2xl font-bold">
+                    <i class="fa fa-line-chart mr-2"></i>梯度下降
+                </span>
+            </div>
+            <div class="hidden md:flex space-x-8">
+                <a href="#overview" class="nav-link">概述</a>
+                <a href="#algorithm" class="nav-link">算法原理</a>
+                <a href="#visualization" class="nav-link">动态演示</a>
+                <a href="#concepts" class="nav-link">核心概念</a>
+                <a href="#summary" class="nav-link">总结</a>
+            </div>
+            <div class="md:hidden">
+                <button id="mobile-menu-button" class="text-text focus:outline-none">
+                    <i class="fa fa-bars text-xl"></i>
+                </button>
+            </div>
+        </nav>
+        <!-- 移动端菜单 -->
+        <div id="mobile-menu" class="hidden md:hidden glass">
+            <div class="container mx-auto px-4 py-4 flex flex-col space-y-4">
+                <a href="#overview" class="nav-link">概述</a>
+                <a href="#algorithm" class="nav-link">算法原理</a>
+                <a href="#visualization" class="nav-link">动态演示</a>
+                <a href="#concepts" class="nav-link">核心概念</a>
+                <a href="#summary" class="nav-link">总结</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 英雄区 -->
+    <section class="min-h-screen flex items-center justify-center pt-16 relative overflow-hidden">
+        <div class="absolute inset-0 z-0">
+            <canvas id="hero-canvas" class="w-full h-full"></canvas>
+        </div>
+        <div class="container mx-auto px-4 z-10 text-center">
+            <h1 class="text-5xl md:text-7xl font-bold mb-6">
+                <span class="text-gradient">梯度下降</span> 算法详解
+            </h1>
+            <p class="text-xl md:text-2xl mb-10 max-w-3xl mx-auto">
+                探索人工智能中最基础也最强大的优化算法
+            </p>
+            <div class="flex flex-col md:flex-row justify-center gap-4">
+                <a href="#overview" class="btn-primary">
+                    <i class="fa fa-book mr-2"></i>开始学习
+                </a>
+                <a href="#visualization" class="btn-secondary">
+                    <i class="fa fa-play-circle mr-2"></i>查看演示
+                </a>
+            </div>
+        </div>
+        <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce-slow">
+            <a href="#overview" class="text-accent">
+                <i class="fa fa-chevron-down text-2xl"></i>
+            </a>
+        </div>
+    </section>
+
+    <!-- 概述区 -->
+    <section id="overview" class="section-padding bg-secondary">
+        <div class="container mx-auto px-4">
+            <h2 class="section-title text-center">什么是梯度下降？</h2>
+            <div class="max-w-4xl mx-auto">
+                <div class="card mb-10 scroll-fade">
+                    <p class="text-lg mb-4">
+                        梯度下降是一种<span class="concept-tooltip text-accent" data-tooltip="优化算法是一种通过系统地选择输入值来最小化或最大化函数值的方法">优化算法</span>，用于寻找函数的最小值。在机器学习和深度学习中，它是训练模型的核心算法，通过不断调整模型参数来最小化损失函数。
+                    </p>
+                    <p class="text-lg">
+                        想象一下，你在山上，想要最快到达山脚。梯度下降算法就像是告诉你："朝着最陡峭的方向迈出一步"。重复这个过程，最终你会到达山脚下，也就是函数的最小值点。
+                    </p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="card scroll-fade">
+                        <div class="text-accent text-4xl mb-4">
+                            <i class="fa fa-calculator"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-2">数学基础</h3>
+                        <p>基于微积分中的导数概念，利用梯度（导数的向量形式）确定函数下降最快的方向。</p>
+                    </div>
+                    <div class="card scroll-fade">
+                        <div class="text-accent text-4xl mb-4">
+                            <i class="fa fa-cogs"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-2">迭代优化</h3>
+                        <p>通过不断迭代更新参数，逐步接近函数最小值，是一种迭代优化方法。</p>
+                    </div>
+                    <div class="card scroll-fade">
+                        <div class="text-accent text-4xl mb-4">
+                            <i class="fa fa-brain"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-2">AI 核心</h3>
+                        <p>是机器学习和深度学习中训练模型的基础算法，用于最小化损失函数。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 算法原理区 -->
+    <section id="algorithm" class="section-padding">
+        <div class="container mx-auto px-4">
+            <h2 class="section-title text-center">算法原理</h2>
+            
+            <!-- 第一张图片讲解 -->
+            <div class="max-w-5xl mx-auto mb-16">
+                <h3 class="section-subtitle text-center">梯度下降更新规则</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                    <div class="image-container scroll-fade">
+                        <img src="https://p3-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/a3b9651c7bdc4730bd85ddc41ea8d765.png~tplv-a9rns2rl98-24:720:720.png?rcl=2025112111223438C53586FAC31543722D&rk3s=8e244e95&rrcfp=8a172a1a&x-expires=1764300155&x-signature=uXrlIOhUUDSdgkL0nu6ysJxm6Kg%3D" 
+                             alt="梯度下降算法公式" 
+                             class="w-full rounded-lg">
+                        <div class="image-overlay">
+                            <button class="btn-primary" onclick="showImageModal(this)">
+                                <i class="fa fa-search-plus mr-2"></i>放大查看
+                            </button>
+                        </div>
+                    </div>
+                    <div class="scroll-fade">
+                        <div class="card">
+                            <h4 class="text-xl font-semibold mb-4 text-accent">核心更新公式</h4>
+                            <p class="mb-4">
+                                梯度下降的核心是参数更新公式：
+                            </p>
+                            <div class="bg-primary p-4 rounded-md mb-4 font-mono text-center">
+                                w = w - α * ∂J(w)/∂w<br>
+                                b = b - α * ∂J(b)/∂b
+                            </div>
+                            <p class="mb-4">
+                                其中：
+                            </p>
+                            <ul class="list-disc pl-5 mb-4 space-y-2">
+                                <li><span class="text-accent">w</span> 和 <span class="text-accent">b</span> 是模型参数</li>
+                                <li><span class="text-accent">α</span> 是<span class="concept-tooltip" data-tooltip="学习率决定了每次迭代中参数更新的步长，过大可能导致不收敛，过小则收敛太慢">学习率</span></li>
+                                <li><span class="text-accent">J(w,b)</span> 是<span class="concept-tooltip" data-tooltip="损失函数衡量模型预测值与实际值之间的差距，我们的目标是最小化这个差距">损失函数</span></li>
+                                <li><span class="text-accent">∂J/∂w</span> 和 <span class="text-accent">∂J/∂b</span> 是损失函数对参数的偏导数</li>
+                            </ul>
+                            <p>
+                                重要的是，参数更新必须<span class="text-accent font-semibold">同时进行</span>，如左侧"Correct"部分所示。这确保了在计算梯度时使用的是同一组参数值。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 第二张图片讲解 -->
+            <div class="max-w-5xl mx-auto">
+                <h3 class="section-subtitle text-center">梯度下降的几何解释</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                    <div class="order-2 lg:order-1 scroll-fade">
+                        <div class="card">
+                            <h4 class="text-xl font-semibold mb-4 text-accent">梯度与最小值</h4>
+                            <p class="mb-4">
+                                从几何角度看，梯度下降是在函数曲面上寻找最低点的过程：
+                            </p>
+                            <ul class="list-disc pl-5 mb-4 space-y-2">
+                                <li>函数 <span class="text-accent">J(w)</span> 表示损失函数随参数 w 变化的曲线</li>
+                                <li>当前点的<span class="concept-tooltip" data-tooltip="梯度是函数在某一点的导数向量，指向函数值增长最快的方向">梯度</span>（导数）决定了参数更新的方向</li>
+                                <li>当梯度为<span class="text-accent">0</span>时，达到了<span class="concept-tooltip" data-tooltip="局部最小值是函数在某个区域内的最小值，但不一定是全局最小值">局部最小值</span></li>
+                            </ul>
+                            <p class="mb-4">
+                                如公式所示：
+                            </p>
+                            <div class="bg-primary p-4 rounded-md mb-4 font-mono text-center">
+                                w = w - α * ∂J(w)/∂w
+                            </div>
+                            <p>
+                                当 ∂J(w)/∂w = 0 时，w 将不再更新，算法收敛到最小值点。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="order-1 lg:order-2 image-container scroll-fade">
+                        <img src="https://p3-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/75940fdf08674dbbbc554d767aaba0c6.png~tplv-a9rns2rl98-24:720:720.png?rcl=2025112111223438C53586FAC31543722D&rk3s=8e244e95&rrcfp=8a172a1a&x-expires=1764300155&x-signature=Hfj8iIzLSTjq%2FbxLrH8fRSVHX0U%3D" 
+                             alt="梯度下降几何解释" 
+                             class="w-full rounded-lg">
+                        <div class="image-overlay">
+                            <button class="btn-primary" onclick="showImageModal(this)">
+                                <i class="fa fa-search-plus mr-2"></i>放大查看
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 动态演示区 -->
+    <section id="visualization" class="section-padding bg-secondary">
+        <div class="container mx-auto px-4">
+            <h2 class="section-title text-center">动态演示</h2>
+            <div class="max-w-5xl mx-auto">
+                <div class="card mb-8 scroll-fade">
+                    <h3 class="section-subtitle">梯度下降过程可视化</h3>
+                    <p class="mb-6">
+                        下面的交互式演示展示了梯度下降算法如何逐步找到函数的最小值。你可以调整学习率和初始值，观察它们如何影响收敛过程。
+                    </p>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <div class="bg-primary p-4 rounded-lg">
+                                <canvas id="gradient-canvas" width="600" height="400" class="w-full h-auto"></canvas>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="card bg-primary">
+                                <h4 class="text-lg font-semibold mb-4 text-accent">控制面板</h4>
+                                
+                                <div class="mb-4">
+                                    <label for="learning-rate" class="block mb-2">学习率 (α):</label>
+                                    <input type="range" id="learning-rate" min="0.01" max="0.5" step="0.01" value="0.1" 
+                                           class="w-full accent-accent">
+                                    <div class="flex justify-between mt-1">
+                                        <span>0.01</span>
+                                        <span id="learning-rate-value">0.1</span>
+                                        <span>0.5</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label for="initial-value" class="block mb-2">初始值 (w₀):</label>
+                                    <input type="range" id="initial-value" min="-5" max="5" step="0.1" value="4" 
+                                           class="w-full accent-accent">
+                                    <div class="flex justify-between mt-1">
+                                        <span>-5</span>
+                                        <span id="initial-value-value">4</span>
+                                        <span>5</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label for="iterations" class="block mb-2">迭代次数:</label>
+                                    <input type="range" id="iterations" min="5" max="100" step="5" value="30" 
+                                           class="w-full accent-accent">
+                                    <div class="flex justify-between mt-1">
+                                        <span>5</span>
+                                        <span id="iterations-value">30</span>
+                                        <span>100</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex space-x-2">
+                                    <button id="start-btn" class="btn-primary flex-1">
+                                        <i class="fa fa-play mr-2"></i>开始
+                                    </button>
+                                    <button id="reset-btn" class="btn-secondary flex-1">
+                                        <i class="fa fa-refresh mr-2"></i>重置
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="card bg-primary mt-4">
+                                <h4 class="text-lg font-semibold mb-2 text-accent">迭代过程</h4>
+                                <div id="iteration-info" class="h-32 overflow-y-auto font-mono text-sm">
+                                    <p>点击"开始"按钮开始演示...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card scroll-fade">
+                    <h3 class="section-subtitle">实时损失函数变化</h3>
+                    <div class="bg-primary p-4 rounded-lg">
+                        <canvas id="loss-canvas" width="600" height="300" class="w-full h-auto"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 核心概念解析区 -->
+    <section id="concepts" class="section-padding">
+        <div class="container mx-auto px-4">
+            <h2 class="section-title text-center">核心概念解析</h2>
+            <div class="max-w-5xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card scroll-fade">
+                        <h3 class="text-xl font-semibold mb-4 text-accent">
+                            <i class="fa fa-arrows-h mr-2"></i>梯度
+                        </h3>
+                        <p class="mb-4">
+                            梯度是函数在某一点的导数向量，它指向函数值增长最快的方向。在梯度下降中，我们沿着梯度的负方向前进，也就是函数值下降最快的方向。
+                        </p>
+                        <div class="bg-primary p-4 rounded-md font-mono">
+                            ∇J(w,b) = [∂J/∂w, ∂J/∂b]
+                        </div>
+                        <p class="mt-4">
+                            梯度的大小表示函数在该点的陡峭程度，梯度的方向指示了函数值变化最快的方向。
+                        </p>
+                    </div>
+                    
+                    <div class="card scroll-fade">
+                        <h3 class="text-xl font-semibold mb-4 text-accent">
+                            <i class="fa fa-tachometer mr-2"></i>学习率
+                        </h3>
+                        <p class="mb-4">
+                            学习率（α）决定了每次迭代中参数更新的步长。选择合适的学习率至关重要：
+                        </p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2">
+                            <li><span class="text-accent">学习率过大</span>：可能导致不收敛，在最小值附近震荡</li>
+                            <li><span class="text-accent">学习率过小</span>：收敛速度太慢，需要更多迭代次数</li>
+                        </ul>
+                        <p>
+                            通常需要通过实验和调优来找到合适的学习率值。
+                        </p>
+                    </div>
+                    
+                    <div class="card scroll-fade">
+                        <h3 class="text-xl font-semibold mb-4 text-accent">
+                            <i class="fa fa-line-chart mr-2"></i>损失函数
+                        </h3>
+                        <p class="mb-4">
+                            损失函数（也称为代价函数）衡量模型预测值与实际值之间的差距。梯度下降的目标是最小化这个损失函数。
+                        </p>
+                        <p class="mb-4">
+                            常见的损失函数包括：
+                        </p>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><span class="text-accent">均方误差（MSE）</span>：常用于回归问题</li>
+                            <li><span class="text-accent">交叉熵损失</span>：常用于分类问题</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card scroll-fade">
+                        <h3 class="text-xl font-semibold mb-4 text-accent">
+                            <i class="fa fa-refresh mr-2"></i>迭代与收敛
+                        </h3>
+                        <p class="mb-4">
+                            梯度下降是一个迭代过程，通过不断更新参数，逐步接近损失函数的最小值。当满足以下条件之一时，算法收敛：
+                        </p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2">
+                            <li>参数变化量小于某个阈值</li>
+                            <li>损失函数的变化量小于某个阈值</li>
+                            <li>达到预设的最大迭代次数</li>
+                        </ul>
+                        <p>
+                            需要注意的是，梯度下降可能会陷入局部最小值，而不是找到全局最小值。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 总结区 -->
+    <section id="summary" class="section-padding bg-secondary">
+        <div class="container mx-auto px-4">
+            <h2 class="section-title text-center">总结</h2>
+            <div class="max-w-4xl mx-auto">
+                <div class="card scroll-fade">
+                    <h3 class="section-subtitle">梯度下降的关键要点</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3 text-accent">基本原理</h4>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li>梯度下降是一种优化算法，用于寻找函数的最小值</li>
+                                <li>它通过沿着梯度的负方向更新参数来最小化损失函数</li>
+                                <li>核心公式：w = w - α * ∂J/∂w</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3 text-accent">关键参数</h4>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li>学习率（α）：控制更新步长</li>
+                                <li>初始参数值：影响收敛速度和最终结果</li>
+                                <li>迭代次数：决定算法运行的时间</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-8">
+                        <h4 class="text-lg font-semibold mb-3 text-accent">应用场景</h4>
+                        <p class="mb-4">
+                            梯度下降在机器学习和深度学习中有广泛应用：
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                            <div class="bg-primary p-3 rounded-md text-center">
+                                <i class="fa fa-area-chart text-accent text-2xl mb-2"></i>
+                                <p>线性回归</p>
+                            </div>
+                            <div class="bg-primary p-3 rounded-md text-center">
+                                <i class="fa fa-bar-chart text-accent text-2xl mb-2"></i>
+                                <p>逻辑回归</p>
+                            </div>
+                            <div class="bg-primary p-3 rounded-md text-center">
+                                <i class="fa fa-sitemap text-accent text-2xl mb-2"></i>
+                                <p>神经网络</p>
+                            </div>
+                            <div class="bg-primary p-3 rounded-md text-center">
+                                <i class="fa fa-code-fork text-accent text-2xl mb-2"></i>
+                                <p>决策树</p>
+                            </div>
+                            <div class="bg-primary p-3 rounded-md text-center">
+                                <i class="fa fa-database text-accent text-2xl mb-2"></i>
+                                <p>支持向量机</p>
+                            </div>
+                            <div class="bg-primary p-3 rounded-md text-center">
+                                <i class="fa fa-cubes text-accent text-2xl mb-2"></i>
+                                <p>深度学习</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-8">
+                        <h4 class="text-lg font-semibold mb-3 text-accent">进阶方向</h4>
+                        <p class="mb-4">
+                            掌握基本梯度下降后，可以进一步学习这些变体：
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-primary p-4 rounded-md">
+                                <h5 class="font-semibold text-accent mb-2">批量梯度下降（BGD）</h5>
+                                <p class="text-sm">使用所有训练数据计算梯度，计算成本高但收敛稳定。</p>
+                            </div>
+                            <div class="bg-primary p-4 rounded-md">
+                                <h5 class="font-semibold text-accent mb-2">随机梯度下降（SGD）</h5>
+                                <p class="text-sm">每次使用一个样本计算梯度，计算速度快但波动大。</p>
+                            </div>
+                            <div class="bg-primary p-4 rounded-md">
+                                <h5 class="font-semibold text-accent mb-2">小批量梯度下降（MBGD）</h5>
+                                <p class="text-sm">平衡了计算效率和收敛稳定性，是最常用的变体。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚区 -->
+    <footer class="bg-primary py-8 border-t border-secondary">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p class="text-text">© 2025 梯度下降算法详解</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-text hover:text-accent transition-colors">
+                        <i class="fa fa-github text-xl"></i>
+                    </a>
+                    <a href="#" class="text-text hover:text-accent transition-colors">
+                        <i class="fa fa-linkedin text-xl"></i>
+                    </a>
+                    <a href="#" class="text-text hover:text-accent transition-colors">
+                        <i class="fa fa-twitter text-xl"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="mt-4 text-center text-sm text-gray-400">
+                <p>本网页内容基于斯坦福大学Andrew Ng教授的深度学习课程</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 图片查看模态框 -->
+    <div id="image-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black bg-opacity-80"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="relative max-w-4xl max-h-[90vh]">
+                <img id="modal-image" src="" alt="放大图片" class="max-w-full max-h-[90vh] rounded-lg">
+                <button id="close-modal" class="absolute top-4 right-4 text-white bg-black bg-opacity-50 rounded-full w-10 h-10 flex items-center justify-center hover:bg-opacity-70 transition-all">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // 导航栏交互
+        document.addEventListener('DOMContentLoaded', function() {
+            // 移动端菜单切换
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            
+            mobileMenuButton.addEventListener('click', function() {
+                mobileMenu.classList.toggle('hidden');
+            });
+            
+            // 导航链接点击事件
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    // 关闭移动端菜单
+                    mobileMenu.classList.add('hidden');
+                    
+                    // 更新活动状态
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+            
+            // 滚动监听，更新导航状态
+            window.addEventListener('scroll', function() {
+                const sections = document.querySelectorAll('section[id]');
+                let currentSection = '';
+                
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop - 100;
+                    const sectionHeight = section.clientHeight;
+                    
+                    if (pageYOffset >= sectionTop && pageYOffset < sectionTop + sectionHeight) {
+                        currentSection = section.getAttribute('id');
+                    }
+                });
+                
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href') === `#${currentSection}`) {
+                        link.classList.add('active');
+                    }
+                });
+                
+                // 滚动动画
+                const scrollElements = document.querySelectorAll('.scroll-fade');
+                scrollElements.forEach(el => {
+                    const elementTop = el.getBoundingClientRect().top;
+                    const elementVisible = 150;
+                    
+                    if (elementTop < window.innerHeight - elementVisible) {
+                        el.classList.add('active');
+                    }
+                });
+            });
+            
+            // 初始化滚动动画
+            const scrollElements = document.querySelectorAll('.scroll-fade');
+            scrollElements.forEach(el => {
+                const elementTop = el.getBoundingClientRect().top;
+                const elementVisible = 150;
+                
+                if (elementTop < window.innerHeight - elementVisible) {
+                    el.classList.add('active');
+                }
+            });
+        });
+        
+        // 图片模态框
+        function showImageModal(button) {
+            const modal = document.getElementById('image-modal');
+            const modalImage = document.getElementById('modal-image');
+            const imageSrc = button.closest('.image-container').querySelector('img').src;
+            
+            modalImage.src = imageSrc;
+            modal.classList.remove('hidden');
+        }
+        
+        document.getElementById('close-modal').addEventListener('click', function() {
+            document.getElementById('image-modal').classList.add('hidden');
+        });
+        
+        // 点击模态框背景关闭
+        document.getElementById('image-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.add('hidden');
+            }
+        });
+        
+        // 英雄区背景动画
+        const heroCanvas = document.getElementById('hero-canvas');
+        const heroCtx = heroCanvas.getContext('2d');
+        
+        function resizeCanvas() {
+            heroCanvas.width = heroCanvas.offsetWidth;
+            heroCanvas.height = heroCanvas.offsetHeight;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // 创建粒子
+        const particles = [];
+        const particleCount = 100;
+        
+        for (let i = 0; i < particleCount; i++) {
+            particles.push({
+                x: Math.random() * heroCanvas.width,
+                y: Math.random() * heroCanvas.height,
+                radius: Math.random() * 2 + 1,
+                color: `rgba(100, 255, 218, ${Math.random() * 0.5 + 0.1})`,
+                speedX: Math.random() * 0.5 - 0.25,
+                speedY: Math.random() * 0.5 - 0.25
+            });
+        }
+        
+        // 粒子连线
+        function connectParticles() {
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 100) {
+                        heroCtx.beginPath();
+                        heroCtx.strokeStyle = `rgba(100, 255, 218, ${0.1 * (1 - distance / 100)})`;
+                        heroCtx.lineWidth = 0.5;
+                        heroCtx.moveTo(particles[i].x, particles[i].y);
+                        heroCtx.lineTo(particles[j].x, particles[j].y);
+                        heroCtx.stroke();
+                    }
+                }
+            }
+        }
+        
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            heroCtx.clearRect(0, 0, heroCanvas.width, heroCanvas.height);
+            
+            particles.forEach(particle => {
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                
+                if (particle.x < 0 || particle.x > heroCanvas.width) {
+                    particle.speedX = -particle.speedX;
+                }
+                
+                if (particle.y < 0 || particle.y > heroCanvas.height) {
+                    particle.speedY = -particle.speedY;
+                }
+                
+                heroCtx.beginPath();
+                heroCtx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                heroCtx.fillStyle = particle.color;
+                heroCtx.fill();
+            });
+            
+            connectParticles();
+        }
+        
+        animate();
+        
+        // 梯度下降可视化
+        const gradientCanvas = document.getElementById('gradient-canvas');
+        const gradientCtx = gradientCanvas.getContext('2d');
+        const lossCanvas = document.getElementById('loss-canvas');
+        const lossCtx = lossCanvas.getContext('2d');
+        
+        // 调整画布大小
+        function resizeGradientCanvas() {
+            gradientCanvas.width = gradientCanvas.offsetWidth;
+            gradientCanvas.height = 400;
+            lossCanvas.width = lossCanvas.offsetWidth;
+            lossCanvas.height = 300;
+        }
+        
+        window.addEventListener('resize', resizeGradientCanvas);
+        resizeGradientCanvas();
+        
+        // 函数定义：f(x) = x^2 + 3x + 5 (示例函数)
+        function functionToMinimize(x) {
+            return Math.pow(x, 2) + 3 * x + 5;
+        }
+        
+        // 导数定义：f'(x) = 2x + 3
+        function derivative(x) {
+            return 2 * x + 3;
+        }
+        
+        // 绘制函数曲线
+        function drawFunction() {
+            gradientCtx.clearRect(0, 0, gradientCanvas.width, gradientCanvas.height);
+            
+            const width = gradientCanvas.width;
+            const height = gradientCanvas.height;
+            const padding = 40;
+            
+            // 绘制坐标轴
+            gradientCtx.beginPath();
+            gradientCtx.strokeStyle = '#8892b0';
+            gradientCtx.lineWidth = 1;
+            
+            // x轴
+            gradientCtx.moveTo(padding, height - padding);
+            gradientCtx.lineTo(width - padding, height - padding);
+            
+            // y轴
+            gradientCtx.moveTo(padding, height - padding);
+            gradientCtx.lineTo(padding, padding);
+            
+            gradientCtx.stroke();
+            
+            // 绘制函数曲线
+            gradientCtx.beginPath();
+            gradientCtx.strokeStyle = '#64ffda';
+            gradientCtx.lineWidth = 2;
+            
+            const xMin = -6;
+            const xMax = 3;
+            const yMin = 0;
+            const yMax = 30;
+            
+            for (let i = 0; i <= width - 2 * padding; i++) {
+                const x = xMin + (xMax - xMin) * i / (width - 2 * padding);
+                const y = functionToMinimize(x);
+                
+                const canvasX = padding + i;
+                const canvasY = height - padding - (y - yMin) * (height - 2 * padding) / (yMax - yMin);
+                
+                if (i === 0) {
+                    gradientCtx.moveTo(canvasX, canvasY);
+                } else {
+                    gradientCtx.lineTo(canvasX, canvasY);
+                }
+            }
+            
+            gradientCtx.stroke();
+            
+            // 绘制刻度和标签
+            gradientCtx.fillStyle = '#ccd6f6';
+            gradientCtx.font = '12px Inter';
+            gradientCtx.textAlign = 'center';
+            
+            // x轴刻度
+            for (let i = -5; i <= 2; i++) {
+                const canvasX = padding + (i - xMin) * (width - 2 * padding) / (xMax - xMin);
+                const canvasY = height - padding + 15;
+                
+                gradientCtx.beginPath();
+                gradientCtx.moveTo(canvasX, height - padding);
+                gradientCtx.lineTo(canvasX, height - padding + 5);
+                gradientCtx.stroke();
+                
+                gradientCtx.fillText(i.toString(), canvasX, canvasY);
+            }
+            
+            // y轴刻度
+            gradientCtx.textAlign = 'right';
+            for (let i = 0; i <= 30; i += 5) {
+                const canvasX = padding - 5;
+                const canvasY = height - padding - (i - yMin) * (height - 2 * padding) / (yMax - yMin);
+                
+                gradientCtx.beginPath();
+                gradientCtx.moveTo(padding, canvasY);
+                gradientCtx.lineTo(padding - 5, canvasY);
+                gradientCtx.stroke();
+                
+                gradientCtx.fillText(i.toString(), canvasX, canvasY + 4);
+            }
+            
+            // 绘制最小值点
+            const minX = -1.5; // 导数为0的点
+            const minY = functionToMinimize(minX);
+            const minCanvasX = padding + (minX - xMin) * (width - 2 * padding) / (xMax - xMin);
+            const minCanvasY = height - padding - (minY - yMin) * (height - 2 * padding) / (yMax - yMin);
+            
+            gradientCtx.beginPath();
+            gradientCtx.arc(minCanvasX, minCanvasY, 5, 0, Math.PI * 2);
+            gradientCtx.fillStyle = '#ff6b6b';
+            gradientCtx.fill();
+            
+            gradientCtx.fillStyle = '#ff6b6b';
+            gradientCtx.font = 'bold 12px Inter';
+            gradientCtx.textAlign = 'center';
+            gradientCtx.fillText('最小值点', minCanvasX, minCanvasY - 10);
+        }
+        
+        // 初始化损失函数图表
+        let lossChart;
+        
+        function initLossChart() {
+            lossChart = new Chart(lossCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '损失值',
+                        data: [],
+                        borderColor: '#64ffda',
+                        backgroundColor: 'rgba(100, 255, 218, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '迭代次数',
+                                color: '#ccd6f6'
+                            },
+                            ticks: {
+                                color: '#ccd6f6'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: '损失值',
+                                color: '#ccd6f6'
+                            },
+                            ticks: {
+                                color: '#ccd6f6'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 初始化
+        drawFunction();
+        initLossChart();
+        
+        // 梯度下降演示
+        let animationId;
+        let iteration = 0;
+        let currentX;
+        let learningRate;
+        let maxIterations;
+        let lossValues = [];
+        
+        function gradientDescent() {
+            // 清除之前的动画
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            // 获取参数
+            learningRate = parseFloat(document.getElementById('learning-rate').value);
+            currentX = parseFloat(document.getElementById('initial-value').value);
+            maxIterations = parseInt(document.getElementById('iterations').value);
+            
+            // 重置状态
+            iteration = 0;
+            lossValues = [];
+            document.getElementById('iteration-info').innerHTML = '';
+            
+            // 更新损失图表
+            lossChart.data.labels = [];
+            lossChart.data.datasets[0].data = [];
+            lossChart.update();
+            
+            // 开始动画
+            animateGradientDescent();
+        }
+        
+        function animateGradientDescent() {
+            if (iteration >= maxIterations) {
+                return;
+            }
+            
+            // 计算当前损失值
+            const currentLoss = functionToMinimize(currentX);
+            lossValues.push(currentLoss);
+            
+            // 更新迭代信息
+            const iterationInfo = document.getElementById('iteration-info');
+            iterationInfo.innerHTML += `<p>迭代 ${iteration}: w = ${currentX.toFixed(4)}, J(w) = ${currentLoss.toFixed(4)}</p>`;
+            iterationInfo.scrollTop = iterationInfo.scrollHeight;
+            
+            // 更新损失图表
+            lossChart.data.labels.push(iteration);
+            lossChart.data.datasets[0].data.push(currentLoss);
+            lossChart.update();
+            
+            // 绘制当前点
+            drawFunction();
+            drawCurrentPoint(currentX);
+            
+            // 计算梯度并更新参数
+            const gradient = derivative(currentX);
+            currentX = currentX - learningRate * gradient;
+            
+            iteration++;
+            
+            // 继续动画
+            animationId = requestAnimationFrame(animateGradientDescent);
+        }
+        
+        function drawCurrentPoint(x) {
+            const width = gradientCanvas.width;
+            const height = gradientCanvas.height;
+            const padding = 40;
+            const xMin = -6;
+            const xMax = 3;
+            const yMin = 0;
+            const yMax = 30;
+            
+            const canvasX = padding + (x - xMin) * (width - 2 * padding) / (xMax - xMin);
+            const canvasY = height - padding - (functionToMinimize(x) - yMin) * (height - 2 * padding) / (yMax - yMin);
+            
+            // 绘制当前点
+            gradientCtx.beginPath();
+            gradientCtx.arc(canvasX, canvasY, 6, 0, Math.PI * 2);
+            gradientCtx.fillStyle = '#ff6b6b';
+            gradientCtx.fill();
+            
+            // 绘制梯度方向
+            const gradientValue = derivative(x);
+            const arrowLength = 30 * Math.sign(gradientValue);
+            
+            gradientCtx.beginPath();
+            gradientCtx.moveTo(canvasX, canvasY);
+            gradientCtx.lineTo(canvasX + arrowLength, canvasY);
+            gradientCtx.strokeStyle = '#ff6b6b';
+            gradientCtx.lineWidth = 2;
+            gradientCtx.stroke();
+            
+            // 绘制箭头
+            const arrowSize = 8;
+            if (arrowLength > 0) {
+                gradientCtx.beginPath();
+                gradientCtx.moveTo(canvasX + arrowLength, canvasY);
+                gradientCtx.lineTo(canvasX + arrowLength - arrowSize, canvasY - arrowSize / 2);
+                gradientCtx.lineTo(canvasX + arrowLength - arrowSize, canvasY + arrowSize / 2);
+                gradientCtx.closePath();
+                gradientCtx.fillStyle = '#ff6b6b';
+                gradientCtx.fill();
+            } else {
+                gradientCtx.beginPath();
+                gradientCtx.moveTo(canvasX + arrowLength, canvasY);
+                gradientCtx.lineTo(canvasX + arrowLength + arrowSize, canvasY - arrowSize / 2);
+                gradientCtx.lineTo(canvasX + arrowLength + arrowSize, canvasY + arrowSize / 2);
+                gradientCtx.closePath();
+                gradientCtx.fillStyle = '#ff6b6b';
+                gradientCtx.fill();
+            }
+            
+            // 显示当前值
+            gradientCtx.fillStyle = '#ccd6f6';
+            gradientCtx.font = '14px Inter';
+            gradientCtx.textAlign = 'center';
+            gradientCtx.fillText(`w = ${x.toFixed(3)}`, canvasX, canvasY - 15);
+        }
+        
+        // 控制面板交互
+        document.getElementById('learning-rate').addEventListener('input', function() {
+            document.getElementById('learning-rate-value').textContent = this.value;
+        });
+        
+        document.getElementById('initial-value').addEventListener('input', function() {
+            document.getElementById('initial-value-value').textContent = this.value;
+        });
+        
+        document.getElementById('iterations').addEventListener('input', function() {
+            document.getElementById('iterations-value').textContent = this.value;
+        });
+        
+        document.getElementById('start-btn').addEventListener('click', gradientDescent);
+        
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            // 清除动画
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            // 重置控制面板
+            document.getElementById('learning-rate').value = 0.1;
+            document.getElementById('learning-rate-value').textContent = '0.1';
+            document.getElementById('initial-value').value = 4;
+            document.getElementById('initial-value-value').textContent = '4';
+            document.getElementById('iterations').value = 30;
+            document.getElementById('iterations-value').textContent = '30';
+            
+            // 重置迭代信息
+            document.getElementById('iteration-info').innerHTML = '<p>点击"开始"按钮开始演示...</p>';
+            
+            // 重置图表
+            lossChart.data.labels = [];
+            lossChart.data.datasets[0].data = [];
+            lossChart.update();
+            
+            // 重绘函数
+            drawFunction();
+        });
+        
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
